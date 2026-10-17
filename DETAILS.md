@@ -98,7 +98,7 @@ When opening a ticket with your ISP's technical support (escalate to Level 2 / n
 
 1. **Clarify that speed tests do not test this:** Physical line quality and continuous transfers work; the fault is **silent eviction of established idle TCP sessions** after `X` seconds.
 2. **Cite the standard:** **[RFC 5382, Section 5, Requirement REQ-5](https://datatracker.ietf.org/doc/html/rfc5382#section-5)** mandates that the NAT idle timeout for established TCP sessions must not be less than **2 hours and 4 minutes (7,440 seconds)**.
-3. **Attach the diagnostic output:** Show the exact idle bracket (`30/45/60s` surviving vs. `75/90/120s` silently dropped while the 20s control connection and fresh connection succeed).
+3. **Attach the diagnostic output:** Show the exact idle bracket (`30/45/60s` surviving vs. `75/90/120s` silently dropped while the 20s control connection and fresh connection succeed). If available, also note that router optical levels and WAN error/discard counters are clean and that the exact same threshold persists immediately after a router reboot (proving a fixed timer configuration rather than fiber degradation or a full NAT table).
 4. **Request the appropriate fix:**
    - **Behind CGNAT (`WAN` in `100.64.0.0/10` or `WAN != Public`):** Request removal from CGNAT (assignment of a public IPv4 address) or correction of the carrier CGNAT established-TCP timeout to ≥ 2h 04m. Bridge mode or replacing your home router will **not** bypass ISP CGNAT.
    - **Not behind CGNAT (`WAN == Public`):** The short timer is in your local router/ONT. Check router settings for a configurable TCP NAT timeout, request a firmware/TR-069 update from the ISP, or put the ISP ONT into **bridge mode** with your own router.
@@ -129,7 +129,7 @@ Configure keepalives **shorter than the measured eviction threshold** (for a 60�
   systemProp.java.net.preferIPv6Addresses=true
   ```
 
-> **Note:** `tcp_keepalive_time` / `KeepAliveTime` only helps applications that explicitly enable `SO_KEEPALIVE` on their sockets. `nat_idle_diag.py` and `diagnose.ps1` explicitly disable `SO_KEEPALIVE` on test sockets so local workarounds do not mask the fault during testing.
+> **Note:** `tcp_keepalive_time` / `KeepAliveTime` only helps applications that explicitly enable `SO_KEEPALIVE` on their sockets. `nat_idle_diag.py` and `diagnose.ps1` explicitly disable `SO_KEEPALIVE` on test sockets so local workarounds do not mask the fault during testing. Once your ISP resolves the fault, remove temporary local keepalive workarounds so future regressions are immediately visible rather than silently masked.
 
 ---
 
@@ -150,7 +150,8 @@ This toolkit was created to diagnose a residential fiber fault where established
   - Idle `30s`, `45s`, `60s` → survived (`ECHO`).
   - Idle `75s`, `90s`, `120s` → died silently (`SILENT`), causing applications to hang for ~15 minutes while `TcpExt.TCPAbortOnTimeout` climbed at **33–43 aborts/hour**.
   - Over 1 hour of passive sampling (`--passive`), **46 distinct IPv4 flows** entered retransmission backoff across **20 destination networks**, compared to **1 IPv6 flow**.
-  - Optical power levels and ONT WAN error counters were completely clean.
+  - Optical power levels and ONT WAN error counters were completely clean, the exact same 60–75s cutoff persisted immediately after an ONT reboot, and the fault reproduced identically on a second machine over Wi-Fi.
+  - The ISP-supplied ONT (`Huawei OptiXstar HG8247B7-8N`, firmware `V5R024C00S114`) had an ISP-locked web UI that exposed no NAT timer or session settings.
 - **Root cause & resolution:**
   - The ONT WAN IPv4 was inside `100.64.0.0/10` (RFC 6598 CGNAT space, `WAN != Public`).
   - Vodafone removed CGNAT from the line and assigned a direct public IPv4 (`WAN == Public`).
